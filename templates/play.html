@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block main_class %}text-center{% endblock %}
+
+{% block content %}
+<!-- Loading State -->
+<div id="loading-view">
+    <div class="spinner"></div>
+    <p class="status-text" style="margin-top:1rem">Loading your quiz...</p>
+</div>
+
+<!-- Waiting for Partner to Join -->
+<div id="waiting-partner-view" class="hidden">
+    <div class="card text-center">
+        <h3>Your Room</h3>
+        <div class="room-code-display" id="wait-room-code"></div>
+        <p class="status-text">Waiting for <span id="wait-partner-name">your partner</span> to join...</p>
+        <div class="spinner"></div>
+    </div>
+</div>
+
+<!-- Quiz Round View -->
+<div id="quiz-view" class="hidden">
+    <div class="round-header">
+        <h3 id="round-label">Love Quiz — Round 1</h3>
+        <p id="round-subtitle" class="subtitle hidden"></p>
+    </div>
+    <div class="progress-container">
+        <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <p id="progress-text" class="subtext"></p>
+
+    <div class="card" id="question-card">
+        <p class="question-text" id="question-text"></p>
+        <div id="options-container"></div>
+        <button class="btn btn-primary hidden" id="btn-confirm" onclick="confirmAnswer()">
+            Lock Answer 🔒
+        </button>
+    </div>
+</div>
+
+<!-- Waiting Between Rounds -->
+<div id="waiting-round-view" class="hidden">
+    <div class="card text-center">
+        <div class="hero-emoji">✨</div>
+        <h3 id="waiting-title">All done!</h3>
+        <p class="status-text" id="waiting-text">Waiting for your partner to finish...</p>
+        <div class="spinner" style="margin-top:1rem"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let gameState = {};
+    let questions = [];
+    let currentQuestionIdx = 0;
+    let selectedOption = null;
+    let currentRound = 1;
+    let pollTimer = null;
+    let isSubmitting = false;
+
+    // Get token from URL query param (primary) or fallback to nothing
+    function getToken() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('token');
+    }
+
+    const token = getToken();
+    if (!token) {
+        window.location.href = '/';
+    } else {
+        // Initialize
+        checkStatus();
+    }
+
+    async function checkStatus() {
+        try {
+            const res = await fetch(`/api/status?token=${token}`);
+            if (!res.ok) {
+                // Invalid token, redirect to landing
+                window.location.href = '/';
+                return;
+            }
+            const data = await res.json();
+            gameState = data;
+            routeToState(data);
+        } catch (e) {
+            showView('loading-view');
+            setTimeout(checkStatus, 3000);
+        }
+    }
+
+    function showView(id) {
+        ['loading-view', 'waiting-partner-view', 'quiz-view', 'waiting-round-view'].forEach(v => {
+            document.getElementById(v).classList.add('hidden');
+        });
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    function routeToState(data) {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+
+        const { status, partner, current_round, questions_answered_count, total_questions, other_partner_name } = data;
+        const myR1Done = data[`partner_${partner}_round1_done`];
+        const myR2Done = data[`partner_${partner}_round2_done`];
+        const otherPartner = partner === 'a' ? 'b' : 'a';
+        const otherR1Done = data[`partner_${otherPartner}_round1_done`];
+        const otherR2Done = data[`partner_${otherPartner}_round2_done`];
+
+        if (status === 'pairing') {
+            // Waiting for partner to join
+            document.getElementById('wait-room-code').textContent = data.room_code;
+            document.getElementById('wait-partner-name').textContent = other_partner_name || 'your partner';
+            showView('waiting-partner-view');
+            startPoll();
+            return;
+        }
+
+        if (status === 'done') {
+            window.location.href = `/results/${data.couple_id}`;
+            return;
+        }
+
+        if (status === 'round1') {
+            if (myR1Done) {
+                // I'm done, waiting for partner
+                document.getElementById('waiting-title').textContent = 'All done! ✨';
+                document.getElementById('waiting-text').textContent = `Waiting for ${other_partner_name} to finish...`;
+                showView('waiting-round-view');
+                startPoll();
+                return;
+            }
+            // Play round 1
+            currentRound = 1;
+            loadQuestions(1);
+            return;
+        }
+
+        if (status === 'round2') {
+            if (myR2Done) {
+                // I'm done, waiting for partner
+                document.getElementById('waiting-title').textContent = 'Almost there! 💕';
+                document.getElementById('waiting-text').textContent = `Waiting for ${other_partner_name} to finish...`;
+                showView('waiting-round-view');
+                startPoll();
+                return;
+            }
+            // Play round 2
+            currentRound = 2;
+            loadQuestions(2);
+            return;
+        }
+    }
+
+    function startPoll() {
+        pollTimer = setInterval(checkStatus, 3000);
+    }
+
+    async function loadQuestions(round) {
+        try {
+            const res = await fetch(`/api/questions?round=${round}&token=${token}`);
+            questions = await res.json();
+
+            // Figure out which question we're on (resume support)
+            currentQuestionIdx = gameState.questions_answered_count || 0;
+
+            if (currentQuestionIdx >= questions.length) {
+                // All answered, must be waiting
+                checkStatus();
+                return;
+            }
+
+            // Set round UI
+            if (round === 1) {
+                document.getElementById('round-label').textContent = 'Love Quiz — Round 1';
+                document.getElementById('round-subtitle').classList.add('hidden');
+            } else {
+                document.getElementById('round-label').textContent = 'Love Quiz — Round 2 💕';
+                const sub = document.getElementById('round-subtitle');
+                sub.textContent = `Guess what ${gameState.other_partner_name} answered!`;
+                sub.classList.remove('hidden');
+            }
+
+            showView('quiz-view');
+            showQuestion();
+        } catch (e) {
+            setTimeout(() => loadQuestions(round), 2000);
+        }
+    }
+
+    function showQuestion() {
+        if (currentQuestionIdx >= questions.length) {
+            checkStatus();
+            return;
+        }
+
+        selectedOption = null;
+        isSubmitting = false;
+        const q = questions[currentQuestionIdx];
+        const total = questions.length;
+
+        // Progress
+        const pct = ((currentQuestionIdx) / total) * 100;
+        document.getElementById('progress-bar').style.width = pct + '%';
+        document.getElementById('progress-text').textContent = `Question ${currentQuestionIdx + 1} of ${total}`;
+
+        // Question text
+        document.getElementById('question-text').textContent = q.text;
+
+        // Options
+        const container = document.getElementById('options-container');
+        container.innerHTML = '';
+
+        const options = [
+            { key: 'a', text: q.option_a },
+            { key: 'b', text: q.option_b },
+            { key: 'c', text: q.option_c },
+            { key: 'd', text: q.option_d }
+        ];
+
+        options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerHTML = `<strong>${opt.key.toUpperCase()}.</strong> ${opt.text}`;
+            btn.onclick = () => selectOption(opt.key, btn);
+            container.appendChild(btn);
+        });
+
+        document.getElementById('btn-confirm').classList.add('hidden');
+
+        // Animate card
+        const card = document.getElementById('question-card');
+        card.style.animation = 'none';
+        card.offsetHeight; // trigger reflow
+        card.style.animation = 'slideUp 0.4s ease-out';
+    }
+
+    function selectOption(key, btn) {
+        if (isSubmitting) return;
+        selectedOption = key;
+
+        document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('btn-confirm').classList.remove('hidden');
+    }
+
+    async function confirmAnswer() {
+        if (!selectedOption || isSubmitting) return;
+        isSubmitting = true;
+
+        const q = questions[currentQuestionIdx];
+        const btn = document.getElementById('btn-confirm');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+
+        try {
+            const res = await fetch(`/api/answer?token=${token}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    question_id: q.id,
+                    selected_option: selectedOption,
+                    round: currentRound
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                // If already answered (resume case), just skip forward
+                if (err.detail === 'Already answered') {
+                    currentQuestionIdx++;
+                    btn.disabled = false;
+                    btn.textContent = 'Lock Answer 🔒';
+                    isSubmitting = false;
+                    showQuestion();
+                    return;
+                }
+                throw new Error(err.detail);
+            }
+
+            currentQuestionIdx++;
+            btn.disabled = false;
+            btn.textContent = 'Lock Answer 🔒';
+            isSubmitting = false;
+
+            if (currentQuestionIdx >= questions.length) {
+                // Finished this round
+                document.getElementById('progress-bar').style.width = '100%';
+                setTimeout(checkStatus, 500);
+            } else {
+                showQuestion();
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = 'Lock Answer 🔒';
+            isSubmitting = false;
+            alert('Error: ' + e.message + '. Please try again.');
+        }
+    }
+</script>
+{% endblock %}
