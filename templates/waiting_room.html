@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card text-center">
+    <h2>Waiting for partner</h2>
+    <p class="text-muted">Tell your partner to join with this code:</p>
+    
+    <div class="code-display">
+        {{ code }}
+    </div>
+    
+    <div class="loader"></div>
+    <p class="mt-20 text-muted">Waiting for them to join...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    setInterval(async () => {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            if (data.status === 'round1') {
+                window.location.href = '/quiz';
+            }
+        } catch(e) {}
+    }, 3000);
+</script>
+{% endblock %}

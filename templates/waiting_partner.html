@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card text-center">
+    <h2>Great job!</h2>
+    
+    <div class="loader"></div>
+    <p class="mt-20 text-muted">Waiting for your partner to finish...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentStatus = null;
+    
+    // Initial fetch to get the current status
+    fetch('/api/status')
+        .then(res => res.json())
+        .then(data => {
+            currentStatus = data.status;
+            pollStatus();
+        });
+        
+    function pollStatus() {
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                
+                // If status changed to a new round, refresh
+                if (currentStatus && data.status !== currentStatus) {
+                    window.location.href = '/quiz';
+                }
+            } catch(e) {}
+        }, 3000);
+    }
+</script>
+{% endblock %}

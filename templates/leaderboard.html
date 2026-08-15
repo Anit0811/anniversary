@@ -1,172 +1,60 @@
 {% extends "base.html" %}
 
-{% block head %}
+{% block extra_head %}
 <style>
-    .leaderboard-page {
-        max-width: 900px;
-        padding: 2rem 1rem;
-    }
-    .leaderboard-title {
-        font-size: 2.5rem;
-        text-align: center;
-        margin-bottom: 0.5rem;
-    }
-    .leaderboard-sub {
-        text-align: center;
-        color: var(--rose-gold);
-        font-size: 1.1rem;
-        margin-bottom: 2rem;
-    }
-    .lb-entry {
-        display: flex;
-        align-items: center;
-        background: #fff;
-        border-radius: var(--radius);
-        padding: 1.25rem 1.5rem;
-        margin-bottom: 1rem;
-        box-shadow: var(--shadow);
-        border: 1px solid var(--blush);
-        animation: slideUp 0.5s ease-out both;
-        gap: 1rem;
-    }
-    .lb-rank {
-        font-size: 2rem;
-        font-weight: bold;
-        min-width: 50px;
-        text-align: center;
-    }
-    .lb-rank-1 { color: var(--gold); }
-    .lb-rank-2 { color: var(--silver); }
-    .lb-rank-3 { color: var(--bronze); }
-    .lb-rank-other { color: #999; }
-    .lb-info {
-        flex: 1;
-    }
-    .lb-names {
-        font-family: var(--font-heading);
-        font-size: 1.3rem;
-        color: var(--charcoal);
-        margin-bottom: 0.25rem;
-    }
-    .lb-score-bar {
-        width: 100%;
-        height: 10px;
-        background: var(--blush);
-        border-radius: 5px;
-        overflow: hidden;
-        margin-top: 0.5rem;
-    }
-    .lb-score-fill {
-        height: 100%;
-        background: linear-gradient(90deg, var(--rose-gold), var(--burgundy));
-        border-radius: 5px;
-        transition: width 1s ease;
-    }
-    .lb-score-val {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: var(--burgundy);
-        min-width: 70px;
-        text-align: right;
-    }
-    .lb-empty {
-        text-align: center;
-        padding: 4rem 2rem;
-        color: #999;
-        font-size: 1.2rem;
-    }
-    .lb-empty-emoji {
-        font-size: 4rem;
-        display: block;
-        margin-bottom: 1rem;
-    }
-    .refresh-note {
-        text-align: center;
-        font-size: 0.8rem;
-        color: #aaa;
-        margin-top: 2rem;
-    }
-    @media (min-width: 768px) {
-        .leaderboard-title { font-size: 3.5rem; }
-        .lb-names { font-size: 1.6rem; }
-        .lb-score-val { font-size: 2rem; }
-        .lb-entry { padding: 1.75rem 2rem; }
-    }
+    .container { max-width: 800px; }
+    h1 { font-size: 3rem; margin-bottom: 40px; }
 </style>
 {% endblock %}
 
-{% block main_class %}leaderboard-page{% endblock %}
-
 {% block content %}
-<h2 class="leaderboard-title">🏆 Love Leaderboard</h2>
-<p class="leaderboard-sub">Who knows each other best?</p>
-
-<div id="leaderboard-list">
-    <div class="lb-empty">
-        <span class="lb-empty-emoji">💕</span>
-        No scores yet — couples are still playing!
+<div class="text-center">
+    <h1>Love Quiz Leaderboard</h1>
+    
+    <div class="leaderboard-list" id="lb-container">
+        <!-- Populated via JS -->
     </div>
 </div>
-
-<p class="refresh-note">Auto-refreshes every 4 seconds</p>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    let currentData = [];
-
-    loadLeaderboard();
-    setInterval(loadLeaderboard, 4000);
-
-    async function loadLeaderboard() {
+    async function updateLeaderboard() {
         try {
             const res = await fetch('/api/leaderboard');
             const data = await res.json();
-            if (JSON.stringify(data) !== JSON.stringify(currentData)) {
-                currentData = data;
-                renderLeaderboard(data);
+            
+            const container = document.getElementById('lb-container');
+            container.innerHTML = '';
+            
+            if (data.couples.length === 0) {
+                container.innerHTML = '<p class="text-muted mt-20">No couples have finished yet...</p>';
+                return;
             }
-        } catch (e) {
-            // Silently retry
-        }
-    }
-
-    function renderLeaderboard(data) {
-        const list = document.getElementById('leaderboard-list');
-
-        if (!data || data.length === 0) {
-            list.innerHTML = `
-                <div class="lb-empty">
-                    <span class="lb-empty-emoji">💕</span>
-                    No scores yet — couples are still playing!
-                </div>`;
-            return;
-        }
-
-        list.innerHTML = '';
-
-        data.forEach((couple, i) => {
-            const rank = i + 1;
-            const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
-            const rankClass = rank <= 3 ? `lb-rank-${rank}` : 'lb-rank-other';
-            const score = Math.round(couple.love_score || 0);
-
-            const entry = document.createElement('div');
-            entry.className = 'lb-entry';
-            entry.style.animationDelay = `${i * 0.1}s`;
-
-            entry.innerHTML = `
-                <div class="lb-rank ${rankClass}">${rankEmoji}</div>
-                <div class="lb-info">
+            
+            data.couples.forEach((couple, index) => {
+                const row = document.createElement('div');
+                row.className = 'lb-row';
+                if (index === 0) row.classList.add('rank-first');
+                else if (index === 1) row.classList.add('rank-second');
+                else if (index === 2) row.classList.add('rank-third');
+                
+                let medal = `#${index + 1}`;
+                if (index === 0) medal = '🥇';
+                if (index === 1) medal = '🥈';
+                if (index === 2) medal = '🥉';
+                
+                row.innerHTML = `
+                    <div class="lb-rank">${medal}</div>
                     <div class="lb-names">${couple.partner_a_name} & ${couple.partner_b_name}</div>
-                    <div class="lb-score-bar">
-                        <div class="lb-score-fill" style="width: ${score}%"></div>
-                    </div>
-                </div>
-                <div class="lb-score-val">${score}%</div>
-            `;
-            list.appendChild(entry);
-        });
+                    <div class="lb-score">${Math.round(couple.love_score)}%</div>
+                `;
+                container.appendChild(row);
+            });
+        } catch(e) {}
     }
+    
+    updateLeaderboard();
+    setInterval(updateLeaderboard, 4000);
 </script>
 {% endblock %}

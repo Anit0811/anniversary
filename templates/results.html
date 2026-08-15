@@ -1,214 +1,55 @@
 {% extends "base.html" %}
 
-{% block main_class %}text-center{% endblock %}
-
-{% block head %}
-<style>
-    .confetti-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 100;
-        overflow: hidden;
-    }
-    .confetti {
-        position: absolute;
-        top: -10px;
-        opacity: 0;
-        animation: confetti-fall linear forwards;
-    }
-    @keyframes confetti-fall {
-        0% { opacity: 1; transform: translateY(0) rotate(0deg); }
-        100% { opacity: 0; transform: translateY(100vh) rotate(720deg); }
-    }
-    .score-message {
-        font-family: var(--font-heading);
-        font-size: 1.4rem;
-        color: var(--rose-gold);
-        margin: 1rem 0 2rem;
-        font-style: italic;
-    }
-    .breakdown-question {
-        font-weight: 600;
-        color: var(--charcoal);
-        margin-bottom: 0.75rem;
-        font-size: 1rem;
-    }
-    .breakdown-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid var(--blush);
-        font-size: 0.95rem;
-    }
-    .breakdown-row:last-child { border-bottom: none; }
-    .match-icon { font-size: 1.2rem; }
-    .guess-detail {
-        font-size: 0.85rem;
-        color: #888;
-        margin-top: 0.25rem;
-    }
-    .results-actions {
-        margin-top: 2rem;
-    }
-    .score-counter {
-        font-size: 5rem;
-        font-family: var(--font-heading);
-        color: var(--burgundy);
-        font-weight: bold;
-        margin: 1rem 0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-    }
-</style>
-{% endblock %}
-
 {% block content %}
-<div id="results-loading">
-    <div class="spinner"></div>
-    <p class="status-text">Loading your results...</p>
+<div class="card text-center">
+    <h2>Your Love Score</h2>
+    
+    <div class="score-display">
+        {{ couple.love_score | int }}%
+    </div>
+    
+    <p class="text-muted">You've both finished! Here's how you did:</p>
+    
+    <h3 style="text-align: left; margin-top: 20px;">Your Guesses About Them</h3>
+    <div class="results-list" style="margin-top: 10px;">
+        {% for res in my_guesses %}
+        <div class="result-item">
+            <div class="result-icon {% if res.matched %}match{% else %}miss{% endif %}">
+                {% if res.matched %}✓{% else %}✗{% endif %}
+            </div>
+            <div>
+                <p style="font-size: 0.9rem; margin-bottom: 5px;">{{ res.question }}</p>
+                <p class="text-muted" style="font-size: 0.8rem;">
+                    {% if res.matched %}You guessed correctly!{% else %}Oops, you missed this one.{% endif %}
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3 style="text-align: left; margin-top: 30px;">Their Guesses About You</h3>
+    <div class="results-list" style="margin-top: 10px;">
+        {% for res in their_guesses %}
+        <div class="result-item">
+            <div class="result-icon {% if res.matched %}match{% else %}miss{% endif %}">
+                {% if res.matched %}✓{% else %}✗{% endif %}
+            </div>
+            <div>
+                <p style="font-size: 0.9rem; margin-bottom: 5px;">{{ res.question }}</p>
+                <p class="text-muted" style="font-size: 0.8rem;">
+                    {% if res.matched %}They guessed correctly!{% else %}They missed this one.{% endif %}
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="mt-20 text-muted">
+        Look at the big screen for the final leaderboard!
+    </div>
+    
+    <div class="mt-20">
+        <a href="/retake" class="btn btn-secondary" style="text-decoration: none;">Play Again</a>
+    </div>
 </div>
-
-<div id="results-content" class="hidden">
-    <div class="confetti-container" id="confetti"></div>
-
-    <div class="card">
-        <h3>Your Love Score 💕</h3>
-        <p class="subtitle"><span id="couple-names"></span></p>
-        <div class="score-counter" id="score-display">0%</div>
-        <p class="score-message" id="score-message"></p>
-    </div>
-
-    <div class="card">
-        <h3>Question Breakdown</h3>
-        <div id="breakdown-list"></div>
-    </div>
-
-    <div class="results-actions">
-        <a href="/leaderboard" class="btn btn-primary">View Leaderboard 🏆</a>
-        <button class="btn btn-secondary" onclick="playAgain()">Play Again 🔄</button>
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    const coupleId = {{ couple_id }};
-
-    loadResults();
-
-    async function loadResults() {
-        try {
-            const res = await fetch(`/api/results/${coupleId}`);
-            if (!res.ok) throw new Error('Could not load results');
-            const data = await res.json();
-            renderResults(data);
-        } catch (e) {
-            document.getElementById('results-loading').innerHTML =
-                '<p class="error-text">Could not load results. Please try refreshing.</p>';
-        }
-    }
-
-    function renderResults(data) {
-        document.getElementById('results-loading').classList.add('hidden');
-        document.getElementById('results-content').classList.remove('hidden');
-
-        // Names
-        document.getElementById('couple-names').textContent =
-            `${data.partner_a_name} & ${data.partner_b_name}`;
-
-        // Animate score counter
-        const score = Math.round(data.love_score || 0);
-        animateScore(score);
-
-        // Score message
-        let msg = '';
-        if (score >= 90) msg = 'Soulmates! 💞 You two are practically telepathic!';
-        else if (score >= 70) msg = 'True Love! 💝 You really know each other!';
-        else if (score >= 50) msg = 'Getting There! 💗 Still learning and loving!';
-        else msg = 'Opposites Attract! 💘 The mystery keeps it exciting!';
-        document.getElementById('score-message').textContent = msg;
-
-        // Breakdown
-        const list = document.getElementById('breakdown-list');
-        list.innerHTML = '';
-
-        data.breakdown.forEach((q, i) => {
-            if (q.is_bonus) return;
-
-            const item = document.createElement('div');
-            item.className = 'breakdown-item';
-            item.style.animationDelay = `${i * 0.1}s`;
-
-            const optionLabel = (key) => key ? key.toUpperCase() : '—';
-
-            item.innerHTML = `
-                <p class="breakdown-question">${i + 1}. ${q.text}</p>
-                <div class="breakdown-row">
-                    <span>${data.partner_a_name}'s answer: <strong>${optionLabel(q.a_answer)}</strong></span>
-                    <span>${data.partner_b_name} guessed: <strong>${optionLabel(q.b_guess)}</strong>
-                        <span class="match-icon">${q.b_guess_correct ? '✅' : '❌'}</span>
-                    </span>
-                </div>
-                <div class="breakdown-row">
-                    <span>${data.partner_b_name}'s answer: <strong>${optionLabel(q.b_answer)}</strong></span>
-                    <span>${data.partner_a_name} guessed: <strong>${optionLabel(q.a_guess)}</strong>
-                        <span class="match-icon">${q.a_guess_correct ? '✅' : '❌'}</span>
-                    </span>
-                </div>
-            `;
-            list.appendChild(item);
-        });
-
-        // Launch confetti
-        launchConfetti();
-    }
-
-    function animateScore(target) {
-        const el = document.getElementById('score-display');
-        let current = 0;
-        const duration = 2000;
-        const start = performance.now();
-
-        function update(now) {
-            const elapsed = now - start;
-            const progress = Math.min(elapsed / duration, 1);
-            // Ease out quad
-            const eased = 1 - (1 - progress) * (1 - progress);
-            current = Math.round(eased * target);
-            el.textContent = current + '%';
-            if (progress < 1) requestAnimationFrame(update);
-        }
-        requestAnimationFrame(update);
-    }
-
-    function launchConfetti() {
-        const container = document.getElementById('confetti');
-        const colors = ['#8B1A4A', '#C78D6D', '#D4AF37', '#E8B4A2', '#F5E6E0', '#FF6B9D'];
-        const shapes = ['❤️', '💕', '✨', '💍', '🥂', '🌹'];
-
-        for (let i = 0; i < 40; i++) {
-            setTimeout(() => {
-                const confetti = document.createElement('div');
-                confetti.className = 'confetti';
-                confetti.textContent = shapes[Math.floor(Math.random() * shapes.length)];
-                confetti.style.left = Math.random() * 100 + '%';
-                confetti.style.fontSize = (Math.random() * 20 + 14) + 'px';
-                confetti.style.animationDuration = (Math.random() * 3 + 2) + 's';
-                confetti.style.animationDelay = '0s';
-                container.appendChild(confetti);
-
-                setTimeout(() => confetti.remove(), 5000);
-            }, i * 100);
-        }
-    }
-
-    function playAgain() {
-        localStorage.clear();
-        window.location.href = '/';
-    }
-</script>
 {% endblock %}

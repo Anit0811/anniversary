@@ -1,203 +1,52 @@
 {% extends "base.html" %}
 
-{% block main_class %}text-center{% endblock %}
-
 {% block content %}
-<div id="landing-view">
-    <div class="hero">
-        <div class="hero-emoji">💍</div>
-        <h2 class="hero-title">Love Quiz</h2>
-        <p class="subtitle">How well do you <em>really</em> know each other?</p>
-        <p class="subtext">25th Anniversary Celebration ✨</p>
-    </div>
+<div class="card">
+    <h1>Love Quiz</h1>
+    <p class="text-muted mb-20">Welcome to the 25th Anniversary Party Game!</p>
+    
+    {% if request.query_params.get('error') == 'invalid_code' %}
+    <p style="color: var(--error); margin-bottom: 15px;">Invalid room code. Please try again.</p>
+    {% endif %}
 
-    <div class="cta-buttons">
-        <button class="btn btn-primary" id="btn-start" onclick="showSection('create-section')">
-            💕 Start as a Couple
-        </button>
-        <button class="btn btn-secondary" id="btn-join" onclick="showSection('join-section')">
-            🔗 Join with Code
-        </button>
-    </div>
-
-    <!-- Create Couple Form -->
-    <div id="create-section" class="card hidden">
-        <h3>Create Your Room</h3>
-        <p class="subtext" style="margin-bottom:1rem;">Enter both names to get started</p>
-        <input type="text" id="partner-a-name" placeholder="Your name" maxlength="30" autocomplete="off" />
-        <input type="text" id="partner-b-name" placeholder="Your partner's name" maxlength="30" autocomplete="off" />
-        <button class="btn btn-primary" id="btn-create-room" onclick="createCouple()">
-            Create Room ✨
-        </button>
-        <button class="btn btn-secondary" onclick="hideAllSections()">Cancel</button>
-        <p id="create-error" class="error-text hidden"></p>
-    </div>
-
-    <!-- Join Couple Form -->
-    <div id="join-section" class="card hidden">
-        <h3>Join Your Partner</h3>
-        <p class="subtext" style="margin-bottom:1rem;">Enter the 4-digit code from your partner's screen</p>
-        <input type="text" id="room-code-input" class="code-input" placeholder="0000" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
-        <button class="btn btn-primary" id="btn-join-room" onclick="joinCouple()">
-            Join Room 💕
-        </button>
-        <button class="btn btn-secondary" onclick="hideAllSections()">Cancel</button>
-        <p id="join-error" class="error-text hidden"></p>
+    <div class="button-group">
+        <button id="btn-start" class="btn">Start as a couple</button>
+        <button id="btn-join" class="btn btn-secondary">Join with code</button>
     </div>
 </div>
 
-<!-- Room Created View -->
-<div id="room-created-view" class="hidden">
-    <div class="card text-center">
-        <h3>Room Created! 🎉</h3>
-        <p class="subtitle">Share this code with your partner</p>
-        <div class="room-code-display" id="display-room-code"></div>
-        <p class="status-text">Waiting for your partner to join...</p>
-        <div class="spinner"></div>
-        <p class="subtext" style="margin-top:1.5rem">Ask them to tap <strong>"Join with Code"</strong> and enter this number</p>
+<!-- Modal for Starting -->
+<div id="modal-start" class="modal-overlay">
+    <div class="modal-content">
+        <button class="close-btn">&times;</button>
+        <h2>Start a Couple</h2>
+        <p class="text-muted mb-20">One of you start the session to get a code.</p>
+        <form action="/start" method="post">
+            <div class="form-group">
+                <label for="partner_a_name">Your Name</label>
+                <input type="text" id="partner_a_name" name="partner_a_name" required autocomplete="off">
+            </div>
+            <button type="submit" class="btn">Get Code</button>
+        </form>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-    // On load, check URL params for a token (resume via link)
-    (function() {
-        const params = new URLSearchParams(window.location.search);
-        const urlToken = params.get('token');
-        if (urlToken) {
-            // Have a token in URL, go straight to play
-            window.location.href = '/play?token=' + urlToken;
-            return;
-        }
-    })();
-
-    function showSection(id) {
-        document.querySelectorAll('#create-section, #join-section').forEach(el => el.classList.add('hidden'));
-        document.getElementById(id).classList.remove('hidden');
-    }
-
-    function hideAllSections() {
-        document.querySelectorAll('#create-section, #join-section').forEach(el => el.classList.add('hidden'));
-    }
-
-    // Store session keyed by token so multiple partners on the same browser don't clash
-    function saveSession(token, data) {
-        const session = {
-            token: token,
-            couple_id: data.couple_id,
-            partner: data.partner,
-            room_code: data.room_code || ''
-        };
-        localStorage.setItem('lq_session_' + token, JSON.stringify(session));
-    }
-
-    async function createCouple() {
-        const nameA = document.getElementById('partner-a-name').value.trim();
-        const nameB = document.getElementById('partner-b-name').value.trim();
-        const errEl = document.getElementById('create-error');
-        errEl.classList.add('hidden');
-
-        if (!nameA || !nameB) {
-            errEl.textContent = 'Please enter both names';
-            errEl.classList.remove('hidden');
-            return;
-        }
-
-        const btn = document.getElementById('btn-create-room');
-        btn.disabled = true;
-        btn.textContent = 'Creating...';
-
-        try {
-            const res = await fetch('/api/create-couple', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ partner_a_name: nameA, partner_b_name: nameB })
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Something went wrong');
-            }
-
-            const data = await res.json();
-
-            // Save session keyed by token
-            saveSession(data.token, data);
-
-            // Show room code and start polling
-            document.getElementById('display-room-code').textContent = data.room_code;
-            document.getElementById('landing-view').classList.add('hidden');
-            document.getElementById('room-created-view').classList.remove('hidden');
-
-            // Poll for partner join, then redirect with token in URL
-            pollForPartner(data.token);
-        } catch (e) {
-            errEl.textContent = e.message;
-            errEl.classList.remove('hidden');
-            btn.disabled = false;
-            btn.textContent = 'Create Room ✨';
-        }
-    }
-
-    async function joinCouple() {
-        const code = document.getElementById('room-code-input').value.trim();
-        const errEl = document.getElementById('join-error');
-        errEl.classList.add('hidden');
-
-        if (!code || code.length !== 4) {
-            errEl.textContent = 'Please enter a valid 4-digit code';
-            errEl.classList.remove('hidden');
-            return;
-        }
-
-        const btn = document.getElementById('btn-join-room');
-        btn.disabled = true;
-        btn.textContent = 'Joining...';
-
-        try {
-            const res = await fetch('/api/join-couple', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ room_code: code })
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Room not found');
-            }
-
-            const data = await res.json();
-
-            // Save session keyed by token
-            saveSession(data.token, data);
-
-            // Redirect to play with token in URL
-            window.location.href = '/play?token=' + data.token;
-        } catch (e) {
-            errEl.textContent = e.message;
-            errEl.classList.remove('hidden');
-            btn.disabled = false;
-            btn.textContent = 'Join Room 💕';
-        }
-    }
-
-    let pollInterval;
-    function pollForPartner(myToken) {
-        pollInterval = setInterval(async () => {
-            try {
-                const res = await fetch(`/api/status?token=${myToken}`);
-                const data = await res.json();
-
-                if (data.status !== 'pairing') {
-                    clearInterval(pollInterval);
-                    // Redirect with MY token, not whatever's in localStorage
-                    window.location.href = '/play?token=' + myToken;
-                }
-            } catch (e) {
-                // Silently retry
-            }
-        }, 3000);
-    }
-</script>
+<!-- Modal for Joining -->
+<div id="modal-join" class="modal-overlay">
+    <div class="modal-content">
+        <button class="close-btn">&times;</button>
+        <h2>Join your partner</h2>
+        <form action="/join" method="post">
+            <div class="form-group">
+                <label for="room_code">4-Digit Room Code</label>
+                <input type="text" id="room_code" name="room_code" required maxlength="4" autocomplete="off" style="text-transform: uppercase;">
+            </div>
+            <div class="form-group">
+                <label for="partner_b_name">Your Name</label>
+                <input type="text" id="partner_b_name" name="partner_b_name" required autocomplete="off">
+            </div>
+            <button type="submit" class="btn">Join Couple</button>
+        </form>
+    </div>
+</div>
 {% endblock %}

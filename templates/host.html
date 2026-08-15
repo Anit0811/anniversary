@@ -1,251 +1,53 @@
 {% extends "base.html" %}
 
-{% block head %}
+{% block extra_head %}
 <style>
-    .host-page { max-width: 1000px; }
-    .host-title { font-size: 1.8rem; text-align: center; margin-bottom: 0.5rem; }
-    .host-sub { text-align: center; color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
-
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2rem;
-    }
-    .stat-card {
-        background: #fff;
-        padding: 1.25rem 1rem;
-        border-radius: var(--radius);
-        text-align: center;
-        box-shadow: var(--shadow);
-        border: 1px solid var(--blush);
-    }
-    .stat-value { font-size: 2.2rem; font-weight: bold; color: var(--burgundy); }
-    .stat-label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-top: 0.25rem; }
-
-    .section-title {
-        font-size: 1.3rem;
-        margin: 2rem 0 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid var(--blush);
-    }
-
-    .couple-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem;
-        background: #fff;
-        border-radius: var(--radius);
-        margin-bottom: 0.75rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        border: 1px solid var(--blush);
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .couple-info { flex: 1; min-width: 200px; }
-    .couple-names { font-weight: 600; font-size: 1rem; }
-    .couple-code { font-size: 0.85rem; color: #888; }
-    .couple-actions { display: flex; gap: 0.5rem; align-items: center; }
-
-    .badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 99px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-    .badge-pairing { background: #FFF3E0; color: #E65100; }
-    .badge-round1 { background: #E3F2FD; color: #1565C0; }
-    .badge-round2 { background: #F3E5F5; color: #7B1FA2; }
-    .badge-done { background: #E8F5E9; color: #2E7D32; }
-
-    .btn-sm {
-        font-size: 0.8rem;
-        padding: 0.4rem 0.8rem;
-        width: auto;
-        margin: 0;
-    }
-    .btn-danger {
-        background: #F44336;
-        color: white;
-        border: none;
-    }
-    .btn-danger:hover { background: #D32F2F; }
-
-    .question-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem;
-        background: #fff;
-        border-radius: var(--radius);
-        margin-bottom: 0.5rem;
-        border: 1px solid var(--blush);
-        gap: 1rem;
-    }
-    .question-text-host {
-        flex: 1;
-        font-size: 0.95rem;
-    }
-    .question-genre {
-        font-size: 0.75rem;
-        color: #888;
-        margin-top: 0.25rem;
-    }
-
-    .toggle-switch {
-        position: relative;
-        width: 50px;
-        height: 28px;
-        flex-shrink: 0;
-    }
-    .toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-    .toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background-color: #ccc;
-        border-radius: 28px;
-        transition: 0.3s;
-    }
-    .toggle-slider:before {
-        content: '';
-        position: absolute;
-        height: 22px;
-        width: 22px;
-        left: 3px;
-        bottom: 3px;
-        background-color: white;
-        border-radius: 50%;
-        transition: 0.3s;
-    }
-    .toggle-switch input:checked + .toggle-slider { background-color: var(--burgundy); }
-    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); }
-
-    .couple-score { font-weight: bold; color: var(--burgundy); }
+    .container { max-width: 900px; }
 </style>
 {% endblock %}
 
-{% block main_class %}host-page{% endblock %}
-
 {% block content %}
-<h2 class="host-title">🎛️ Host Dashboard</h2>
-<p class="host-sub">Auto-refreshes every 5 seconds</p>
-
-<div class="stats-grid" id="stats-grid">
-    <div class="stat-card"><div class="stat-value" id="stat-total">—</div><div class="stat-label">Total</div></div>
-    <div class="stat-card"><div class="stat-value" id="stat-pairing">—</div><div class="stat-label">Pairing</div></div>
-    <div class="stat-card"><div class="stat-value" id="stat-round1">—</div><div class="stat-label">Round 1</div></div>
-    <div class="stat-card"><div class="stat-value" id="stat-round2">—</div><div class="stat-label">Round 2</div></div>
-    <div class="stat-card"><div class="stat-value" id="stat-done">—</div><div class="stat-label">Completed</div></div>
+<div class="card">
+    <h2>Host Panel</h2>
+    <p class="text-muted mb-20">Monitor live progress</p>
+    
+    <div style="overflow-x: auto;">
+        <table class="leaderboard-table host-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Code</th>
+                    <th>Couple</th>
+                    <th>Status</th>
+                    <th>Score</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in couples %}
+                <tr>
+                    <td>{{ c.id }}</td>
+                    <td>{{ c.room_code }}</td>
+                    <td>{{ c.partner_a_name }} & {{ c.partner_b_name or '?' }}</td>
+                    <td>
+                        <span class="badge {{ c.status }}">{{ c.status }}</span>
+                    </td>
+                    <td>
+                        {% if c.status == 'done' %}{{ c.love_score | int }}%{% else %}-{% endif %}
+                    </td>
+                    <td>
+                        <form action="/host-xyz123/delete/{{ c.id }}" method="post" onsubmit="return confirm('Delete this couple and all their answers?');">
+                            <button type="submit" class="btn btn-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">No couples yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
-
-<h3 class="section-title">Couples</h3>
-<div id="couples-list"><p class="subtext">Loading...</p></div>
-
-<h3 class="section-title">Questions</h3>
-<div id="questions-list"><p class="subtext">Loading...</p></div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    loadHostData();
-    setInterval(loadHostData, 5000);
-
-    async function loadHostData() {
-        try {
-            const res = await fetch('/api/host/status');
-            const data = await res.json();
-            renderStats(data.stats);
-            renderCouples(data.couples);
-            renderQuestions(data.questions);
-        } catch (e) {
-            // Silently retry
-        }
-    }
-
-    function renderStats(stats) {
-        document.getElementById('stat-total').textContent = stats.total || 0;
-        document.getElementById('stat-pairing').textContent = stats.pairing || 0;
-        document.getElementById('stat-round1').textContent = stats.round1 || 0;
-        document.getElementById('stat-round2').textContent = stats.round2 || 0;
-        document.getElementById('stat-done').textContent = stats.done || 0;
-    }
-
-    function renderCouples(couples) {
-        const list = document.getElementById('couples-list');
-        if (!couples || couples.length === 0) {
-            list.innerHTML = '<p class="subtext">No couples yet</p>';
-            return;
-        }
-
-        list.innerHTML = '';
-        couples.forEach(c => {
-            const badgeClass = `badge-${c.status}`;
-            const score = c.love_score !== null ? Math.round(c.love_score) + '%' : '—';
-            const row = document.createElement('div');
-            row.className = 'couple-row';
-            row.innerHTML = `
-                <div class="couple-info">
-                    <div class="couple-names">${c.partner_a_name} & ${c.partner_b_name || '(waiting)'}</div>
-                    <div class="couple-code">Code: ${c.room_code} | Score: <span class="couple-score">${score}</span></div>
-                </div>
-                <div class="couple-actions">
-                    <span class="badge ${badgeClass}">${c.status}</span>
-                    <button class="btn btn-sm btn-danger" onclick="resetCouple(${c.id})">Reset</button>
-                </div>
-            `;
-            list.appendChild(row);
-        });
-    }
-
-    function renderQuestions(questions) {
-        const list = document.getElementById('questions-list');
-        if (!questions || questions.length === 0) {
-            list.innerHTML = '<p class="subtext">No questions found</p>';
-            return;
-        }
-
-        list.innerHTML = '';
-        questions.forEach(q => {
-            const row = document.createElement('div');
-            row.className = 'question-row';
-            row.innerHTML = `
-                <div class="question-text-host">
-                    ${q.text}
-                    <div class="question-genre">${q.genre || ''} ${q.is_bonus ? '(Bonus)' : ''}</div>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" ${q.active ? 'checked' : ''} onchange="toggleQuestion(${q.id})">
-                    <span class="toggle-slider"></span>
-                </label>
-            `;
-            list.appendChild(row);
-        });
-    }
-
-    async function resetCouple(id) {
-        if (!confirm('Reset this couple? All their answers will be deleted.')) return;
-        try {
-            await fetch(`/api/host/reset/${id}`, { method: 'POST' });
-            loadHostData();
-        } catch (e) {
-            alert('Error resetting couple');
-        }
-    }
-
-    async function toggleQuestion(id) {
-        try {
-            await fetch(`/api/host/toggle-question/${id}`, { method: 'POST' });
-        } catch (e) {
-            alert('Error toggling question');
-            loadHostData();
-        }
-    }
-</script>
 {% endblock %}
