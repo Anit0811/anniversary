@@ -102,7 +102,7 @@ def seed_questions(conn):
         ''', q)
 
 def generate_room_code():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return ''.join(random.choices(string.digits, k=4))
 
 def create_couple(partner_a_name):
     conn = get_db()
