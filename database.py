@@ -202,12 +202,18 @@ def save_answer(couple_id, partner, question_id, round_num, selected_option):
         WHERE couple_id = ? AND partner = ? AND question_id = ? AND round = ?
     ''', (couple_id, partner, question_id, round_num))
     
-    if not c.fetchone():
+    row = c.fetchone()
+    if not row:
         c.execute('''
             INSERT INTO answers (couple_id, partner, question_id, round, selected_option, answered_at)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (couple_id, partner, question_id, round_num, selected_option, datetime.now()))
-        conn.commit()
+    else:
+        c.execute('''
+            UPDATE answers SET selected_option = ?, answered_at = ?
+            WHERE id = ?
+        ''', (selected_option, datetime.now(), row['id']))
+    conn.commit()
     conn.close()
 
 def get_answered_questions(couple_id, partner, round_num):
@@ -257,7 +263,7 @@ def check_round_completion(couple_id):
         status = 'round2'
         
     # Get counts for A and B in round 2
-    if status == 'round2':
+    if status in ['round2', 'done']:
         c.execute("SELECT COUNT(*) FROM answers WHERE couple_id = ? AND partner = 'a' AND round = 2", (couple_id,))
         a_round2 = c.fetchone()[0]
         c.execute("SELECT COUNT(*) FROM answers WHERE couple_id = ? AND partner = 'b' AND round = 2", (couple_id,))

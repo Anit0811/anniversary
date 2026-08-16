@@ -9,6 +9,10 @@
     
     <h2 style="text-align: left; margin-bottom: 5px;">{{ prompt }}</h2>
     
+    <div class="progress-bar">
+        <div class="progress" style="width: {{ (q_index / total_q) * 100 }}%"></div>
+    </div>
+    
     <div class="question-text">
         {{ question.text }}
     </div>
@@ -16,23 +20,36 @@
     <form action="/answer" method="post" id="answer-form">
         <input type="hidden" name="question_id" value="{{ question.id }}">
         <input type="hidden" name="round_num" value="{{ round_num }}">
-        <input type="hidden" name="selected_option" id="selected_option" value="">
+        <input type="hidden" name="q_index" value="{{ q_index }}">
+        <input type="hidden" name="selected_option" id="selected_option" value="{{ current_selected or '' }}">
         
         <div class="options-grid">
-            <button type="button" class="option-btn" data-value="a">
+            <button type="button" class="option-btn {% if current_selected == 'a' %}selected{% endif %}" data-value="a">
                 <span class="label">A</span> {{ question.option_a }}
             </button>
-            <button type="button" class="option-btn" data-value="b">
+            <button type="button" class="option-btn {% if current_selected == 'b' %}selected{% endif %}" data-value="b">
                 <span class="label">B</span> {{ question.option_b }}
             </button>
-            <button type="button" class="option-btn" data-value="c">
+            <button type="button" class="option-btn {% if current_selected == 'c' %}selected{% endif %}" data-value="c">
                 <span class="label">C</span> {{ question.option_c }}
             </button>
-            <button type="button" class="option-btn" data-value="d">
+            <button type="button" class="option-btn {% if current_selected == 'd' %}selected{% endif %}" data-value="d">
                 <span class="label">D</span> {{ question.option_d }}
             </button>
         </div>
     </form>
+    
+    <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+        {% if has_previous %}
+        <a href="/quiz?q={{ q_index - 1 }}" class="btn btn-secondary" style="width: 48%; text-decoration: none;">Back</a>
+        {% else %}
+        <div style="width: 48%;"></div>
+        {% endif %}
+        
+        {% if has_next %}
+        <a href="/quiz?q={{ q_index + 1 }}" class="btn btn-secondary" style="width: 48%; text-decoration: none;">Next</a>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
 

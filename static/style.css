@@ -223,6 +223,12 @@ button:active, .btn:active {
   background-color: var(--border-color);
 }
 
+.option-btn.selected {
+  border-color: var(--primary-color);
+  background-color: #ffe0e9;
+  box-shadow: 0 4px 10px rgba(216, 27, 96, 0.15);
+}
+
 .option-btn .label {
   font-weight: bold;
   margin-right: 15px;

@@ -53,7 +53,7 @@ async def waiting(request: Request, code: str):
     return templates.TemplateResponse("waiting_room.html", {"request": request, "code": code})
 
 @app.get("/quiz", response_class=HTMLResponse)
-async def quiz(request: Request, couple_id: Optional[str] = Cookie(None), partner: Optional[str] = Cookie(None)):
+async def quiz(request: Request, q: Optional[int] = None, couple_id: Optional[str] = Cookie(None), partner: Optional[str] = Cookie(None)):
     if not couple_id or not partner:
         return RedirectResponse(url="/")
         
@@ -67,28 +67,43 @@ async def quiz(request: Request, couple_id: Optional[str] = Cookie(None), partne
     if couple['status'] == 'pairing':
         return RedirectResponse(url=f"/waiting?code={couple['room_code']}")
         
-    if couple['status'] == 'done':
+    if couple['status'] == 'done' and q is None:
         return RedirectResponse(url="/results")
         
-    round_num = 1 if couple['status'] == 'round1' else 2
+    round_num = 1 if couple['status'] in ['round1', 'done'] else 2
+    if couple['status'] == 'done':
+        # If they are done but navigating back, keep them in round 2
+        round_num = 2
+        
     # Get questions
     questions = db.get_couple_questions(int(couple_id), partner, round_num)
     
     # Get answered questions for this partner and round
     answered = db.get_answered_questions(int(couple_id), partner, round_num)
     
-    # Find next unanswered question
-    next_q = None
-    q_index = 0
-    for i, q in enumerate(questions):
-        if q['id'] not in answered:
-            next_q = q
-            q_index = i
-            break
+    if q is not None and 1 <= q <= len(questions):
+        q_index = q - 1
+        current_q = questions[q_index]
+    else:
+        # Find next unanswered question
+        next_q = None
+        q_index = 0
+        for i, question in enumerate(questions):
+            if question['id'] not in answered:
+                next_q = question
+                q_index = i
+                break
+                
+        if not next_q:
+            # This partner finished the round, check if other did
+            if couple['status'] == 'done':
+                return RedirectResponse(url="/results")
+            return templates.TemplateResponse("waiting_partner.html", {"request": request})
             
-    if not next_q:
-        # This partner finished the round, check if other did
-        return templates.TemplateResponse("waiting_partner.html", {"request": request})
+        current_q = next_q
+        
+    has_previous = q_index > 0
+    has_next = current_q['id'] in answered and q_index < len(questions) - 1
         
     # the question text changes in round 2
     if round_num == 2:
@@ -97,13 +112,18 @@ async def quiz(request: Request, couple_id: Optional[str] = Cookie(None), partne
     else:
         prompt = "Answer about yourself"
         
+    current_selected = answered.get(current_q['id'])
+        
     return templates.TemplateResponse("quiz.html", {
         "request": request,
-        "question": next_q,
+        "question": current_q,
         "q_index": q_index + 1,
         "total_q": len(questions),
         "round_num": round_num,
-        "prompt": prompt
+        "prompt": prompt,
+        "has_previous": has_previous,
+        "has_next": has_next,
+        "current_selected": current_selected
     })
 
 @app.post("/answer")
@@ -112,6 +132,7 @@ async def submit_answer(
     question_id: int = Form(...), 
     selected_option: str = Form(...),
     round_num: int = Form(...),
+    q_index: int = Form(...),
     couple_id: Optional[str] = Cookie(None), 
     partner: Optional[str] = Cookie(None)
 ):
@@ -119,9 +140,13 @@ async def submit_answer(
         return RedirectResponse(url="/", status_code=302)
         
     db.save_answer(int(couple_id), partner, question_id, round_num, selected_option)
-    db.check_round_completion(int(couple_id))
+    status = db.check_round_completion(int(couple_id))
     
-    return RedirectResponse(url="/quiz", status_code=302)
+    if status in ['round2', 'done'] and round_num == (1 if status == 'round2' else 2):
+        # Round just finished, check if they were on the last question of the round
+        return RedirectResponse(url="/quiz", status_code=302)
+    
+    return RedirectResponse(url=f"/quiz?q={q_index + 1}", status_code=302)
 
 @app.get("/api/status")
 async def get_status(couple_id: Optional[str] = Cookie(None)):
